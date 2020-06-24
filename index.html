@@ -1,0 +1,500 @@
+<html>
+<head>
+<title>Laser Image Dither Tool</title>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/camanjs/4.0.0/caman.full.min.js"></script>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+<script>
+
+var ori_width = 1;
+var ori_height = 1;
+var lock_dim = {'width': false, 'height': false};
+var lock_filters = false;
+var image_file;
+var histdata_orig = calc_histogram(null);
+var histdata_after = calc_histogram(null);
+var rendered_img;
+
+function exp_slider_value(x, div)
+{
+	return Math.exp(x / div)
+}
+
+$( function() {
+	$("#rendering-div").hide();
+	$("#dithering-div").hide();
+
+	$( "#resolution" ).selectmenu({
+		change: function( event, ui ) {
+			console.log("resolution = " + $("#resolution option:selected").val());
+		}
+	});
+	$( "#resolution-button" ).width("20em");
+	var handle_brightness = $( "#slider-brightness-handle" );
+	$( "#slider-brightness" ).slider({
+		min: -100,
+		max: 100,
+		step: 1,
+		create: function() {
+			handle_brightness.text( $( this ).slider( "value" ) );
+			handle_brightness.css("width", "2.5em");
+			handle_brightness.css("margin-left", "-1.25em");
+		},
+		slide: function( event, ui ) {
+			handle_brightness.text( ui.value );
+			console.log("brightness = " + ui.value);
+			if (lock_filters == false) {
+				//apply_filters();
+			}
+		},
+		change: function() {
+			var v = $( this ).slider( "value" );
+			handle_brightness.text( v );
+			console.log("brightness = " + v);
+			if (lock_filters == false) {
+				apply_filters();
+			}
+		}
+	});
+	var handle_contrast = $( "#slider-contrast-handle" );
+	$( "#slider-contrast" ).slider({
+		min: -100,
+		max: 100,
+		step: 1,
+		create: function() {
+			handle_contrast.text( $( this ).slider( "value" ) );
+			handle_contrast.css("width", "2.5em");
+			handle_contrast.css("margin-left", "-1.25em");
+			console.log("contast = " + $( this ).slider( "value" ));
+		},
+		slide: function( event, ui ) {
+			handle_contrast.text( ui.value );
+			console.log("contast = " + ui.value);
+			if (lock_filters == false) {
+				//apply_filters();
+			}
+		},
+		change: function() {
+			var v = $( this ).slider( "value" );
+			handle_contrast.text( v );
+			console.log("contast = " + v);
+			if (lock_filters == false) {
+				apply_filters();
+			}
+		}
+	});
+	var handle_gamma = $( "#slider-gamma-handle" );
+	$( "#slider-gamma" ).slider({
+		min: -100,
+		max: 100,
+		step: 1,
+		create: function() {
+			handle_gamma.text( $( this ).slider( "value" ) );
+			handle_gamma.css("width", "2.5em");
+			handle_gamma.css("margin-left", "-1.25em");
+			console.log("gamma = " + $( this ).slider( "value" ));
+		},
+		slide: function( event, ui ) {
+			handle_gamma.text( ui.value );
+			console.log("gamma = " + ui.value);
+			if (lock_filters == false) {
+				//apply_filters();
+			}
+		},
+		change: function() {
+			var v = $( this ).slider( "value" );
+			handle_gamma.text( v );
+			console.log("gamma = " + v);
+			if (lock_filters == false) {
+				apply_filters();
+			}
+		}
+	});
+
+	var spinner_change = function (spinner, other_spinner, name, other_name) {
+		var x = Number(spinner.val());
+		console.log(name + " = " + x);
+		if (lock_dim[name]) {
+			return;
+		}
+		var y = x.toFixed(1);
+		if (x != y) {
+			lock_dim[name] = true;
+			spinner.spinner( "option", "step", 0.1 );
+			spinner.spinner("value", y);
+			spinner.spinner( "option", "step", 1 );
+			lock_dim[name] = false;
+		}
+		if (chk_invert.prop("checked")) {
+			lock_dim[other_name] = true;
+			var z;
+			if (name == "width") {
+				z = (y * ori_height) / ori_width;
+			}
+			else {
+				z = (y * ori_width) / ori_height;
+			}
+			other_spinner.spinner( "option", "step", 0.1 );
+			other_spinner.spinner("value", z.toFixed(1));
+			other_spinner.spinner( "option", "step", 1 );
+			lock_dim[other_name] = false;
+		}
+	};
+
+	var spinner_width = $( "#img-width" ).spinner({
+		min: 1,
+		max: 10000,
+		step: 1,
+		numberFormat: "N1",
+		change: function( event, ui ) {
+			spinner_change(spinner_width, spinner_height, "width", "height");
+		},
+		stop: function (event, ui) {
+			spinner_change(spinner_width, spinner_height, "width", "height");
+		}
+	});
+	var spinner_height = $( "#img-height" ).spinner({
+		min: 1,
+		max: 10000,
+		step: 1,
+		numberFormat: "N1",
+		change: function( event, ui ) {
+			spinner_change(spinner_height, spinner_width, "height", "width");
+		},
+		stop: function (event, ui) {
+			spinner_change(spinner_height, spinner_width, "height", "width");
+		}
+	});
+	var btn_dither = $( "#btn-dither" ).button();
+	btn_dither.click(function(event) {
+		console.log("clicked dither");
+		dither();
+	});
+	$("#btn-dither").button("disable");
+	var chk_lockaspect = $( "#lock-aspect" ).checkboxradio();
+	var chk_invert = $( "#invert" ).checkboxradio();
+	chk_invert.on("change", function( event ) {
+		console.log("invert = " + chk_invert.prop("checked"));
+		if (lock_filters == false) {
+			apply_filters();
+		}
+	});
+
+	// trigger change event on all spinner buttons
+	$('.ui-spinner-button').click(function() {
+		$(this).siblings('input').change();
+	});
+
+	$("#btn-load-file").change(function(event) {
+		image_file = event.target.files[0];
+		load_file_to_canvas(image_file, "orig-img", function() {
+			Caman("#orig-img", function() {
+				lock_dim["width"] = true;
+				lock_dim["height"] = true;
+				ori_width = this.width;
+				ori_height = this.height;
+				var resmulti = $("#resolution option:selected").val();
+				spinner_width.spinner("value", (this.width / resmulti).toFixed(1));
+				spinner_height.spinner("value", (this.height / resmulti).toFixed(1));
+				chk_lockaspect.attr("checked", "checked");
+				lock_dim["width"] = false;
+				lock_dim["height"] = false;
+				lock_filters = true;
+				$("#slider-brightness").slider("value", 0);
+				$("#slider-contrast").slider("value", 0);
+				$("#slider-gamma").slider("value", 0);
+				apply_filters();
+				lock_filters = false;
+				this.greyscale();
+				this.render(function(){
+					histdata_orig = calc_histogram(document.getElementById("orig-img"));
+				});
+			});
+		});
+	});
+});
+
+function load_file_to_canvas(file, canvasId, fcn)
+{
+	var canvas = document.getElementById(canvasId);
+	var fr = new FileReader();
+	fr.onload = function(e) {
+		var img = new Image();
+		img.onload = function() {
+			canvas.width = img.width;
+			canvas.height = img.height;
+			var ctx = canvas.getContext("2d");
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			$("#fld-dithered").hide();
+			$("#btn-dither").button("disable");
+			$("#" + canvasId).hide();
+			$("#rendering-div").show();
+			ctx.drawImage(img, 0, 0);
+			fcn();
+		};
+		img.src = fr.result;
+	};
+	fr.readAsDataURL(file);
+}
+
+function apply_filters()
+{
+	load_file_to_canvas(image_file, "visible-img", function() {
+		var ca = Caman("#visible-img", function() {
+			this.revert(null);
+			var g = $("#slider-gamma").slider("value"); g = exp_slider_value(g, 62); this.gamma(g);
+			var b = $("#slider-brightness").slider("value"); this.exposure(b);
+			var c = $("#slider-contrast").slider("value"); this.contrast(c);
+			if ($("#invert").prop("checked")) {
+				this.invert();
+				console.log("rendered inverted");
+			}
+			else {
+				console.log("rendered not inverted");
+			}
+			this.greyscale();
+			this.render(function() {
+				rendered_img = this.toBase64("png");
+				$("#fld-dithered").hide();
+				$("#visible-img").show();
+				$("#rendering-div").hide();
+				$("#btn-dither").button("enable");
+				$("#fld-img").show();
+				histdata_after = calc_histogram(document.getElementById("visible-img"));
+				draw_histogram(histdata_orig.arr,  Math.max(histdata_after.max, histdata_orig.max), document.getElementById("hist-orig"), false);
+				draw_histogram(histdata_after.arr, Math.max(histdata_after.max, histdata_orig.max), document.getElementById("hist-after"), $("#invert").prop("checked"));
+				$("#fld-hist").show();
+			});
+		});
+	});
+}
+
+function calc_histogram(srcCanvas)
+{
+	var averages = Array(256);
+	averages.fill(0);
+	var max = 0;
+	if (srcCanvas != null)
+	{
+		var srcCtx = srcCanvas.getContext("2d");
+		var data = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height).data
+		var avg, i;
+		for (i = 0; i < data.length; i += 1) {
+			avg = data[i];
+			averages[avg]++;
+		}
+		max = averages.reduce(function(a, b) {
+			return Math.max(a, b);
+		});
+	}
+	var ret = {
+		arr: averages,
+		max: max
+	};
+	return ret;
+}
+
+function draw_histogram(averages, max, tgtCanvas, flip)
+{
+	var x, y;
+	var tgtCtx = tgtCanvas.getContext('2d')
+
+	tgtCanvas.width = 258;
+	tgtCanvas.height = 100;
+	tgtCtx.clearRect(0, 0, tgtCanvas.width, tgtCanvas.height);
+
+	tgtCtx.beginPath();
+	tgtCtx.strokeStyle = '#000';
+	tgtCtx.lineWidth   = 1;
+	tgtCtx.rect(0, 0, tgtCanvas.width, tgtCanvas.height);
+	tgtCtx.stroke();
+
+	tgtCtx.beginPath();
+	tgtCtx.strokeStyle = '#F00';
+	tgtCtx.lineWidth   = 1;
+
+	averages.forEach(function(y, x) {
+
+		var xx = x;
+		if (flip) {
+			xx = 255 - x;
+		}
+		y = y | 0;
+
+		y = Math.floor(((y / max) * 100));
+
+		tgtCtx.moveTo(xx + 1.5, 100);
+		tgtCtx.lineTo(xx + 1.5, 100 - y);
+		tgtCtx.stroke();
+	});
+
+	tgtCtx.putImageData(tgtCtx.getImageData(0, 0, tgtCanvas.width, tgtCanvas.height), 0, 0);
+}
+
+function getPixIdx(y, x, width)
+{
+	return (y * width + x) * 4;
+}
+
+function minmax(v)
+{
+	if (v > 255) {
+		v = 255;
+	}
+	if (v < 0) {
+		v = 0;
+	}
+	return v;
+}
+
+function dither()
+{
+	$("#dithering-div").show();
+	$("#btn-dither").button("disable");
+	var resmulti = Number($("#resolution option:selected").val());
+	var nwidth = Math.round(Number($( "#img-width" ).spinner("value")) * resmulti);
+	var nheight = Math.round(Number($( "#img-height" ).spinner("value")) * resmulti);
+	console.log("new width " + nwidth + " height " + nheight);
+
+	var srcCanvas = document.getElementById("visible-img");
+	var srcCtx = srcCanvas.getContext("2d");
+
+	var tgtCanvas = document.getElementById("dithered-img");
+	tgtCanvas.width = nwidth;
+	tgtCanvas.height = nheight;
+	var tgtCtx = tgtCanvas.getContext("2d");
+
+	var imageObj = new Image();
+	imageObj.onload = function() {
+		tgtCtx.drawImage(this, 0, 0, srcCanvas.width, srcCanvas.height, 0, 0, tgtCanvas.width, tgtCanvas.height);
+
+		var imgdata = tgtCtx.getImageData(0, 0, tgtCanvas.width, tgtCanvas.height);
+		
+		var sf = 1.0;
+		var x, y;
+		for (y = 0; y < nheight; y++)
+		{
+			for (x = 1; x < nwidth; x++)
+			{
+				var idx = getPixIdx(y, x, nwidth);
+				var old_pix = imgdata.data[idx];
+				var new_pix = Math.round(sf * old_pix / 255.0) * (255.0 / sf);
+				imgdata.data[idx + 0] = new_pix;
+				imgdata.data[idx + 1] = new_pix;
+				imgdata.data[idx + 2] = new_pix;
+				imgdata.data[idx + 3] = 255;
+				var quant_error_p = old_pix - new_pix;
+
+				imgdata.data[getPixIdx(y,     x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y,     x + 1, nwidth)] + quant_error_p * 7 / 16.0);
+				imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] + quant_error_p * 3 / 16.0);
+				imgdata.data[getPixIdx(y + 1, x    , nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x    , nwidth)] + quant_error_p * 5 / 16.0);
+				imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] + quant_error_p * 1 / 16.0);
+			}
+		}
+		tgtCtx.putImageData(imgdata, 0, 0);
+
+		$("#dithering-div").hide();
+		$("#btn-dither").button("enable");
+		$("#fld-img").hide();
+		$("#fld-hist").hide();
+		$("#fld-dithered").show();
+	};
+	imageObj.src = rendered_img;
+
+}
+</script>
+
+<style>
+.ui-draggable, .ui-droppable {
+	background-position: top;
+}
+
+.ui-slider-horizontal {
+	height: .6em;
+}
+
+.ui-slider-handle {
+	width: 6em;
+	height: 2em;
+	top: 50%;
+	/*margin-top: -.8em;*/
+	text-align: center;
+	line-height: 1.2em;
+	font-size: 10pt;
+}
+
+.slider-fieldset-div
+{
+	width: 95%;
+}
+
+.ui-spinner
+{
+	min-width: 100px;
+}
+</style>
+
+</head>
+<body>
+<form id="main-frm">
+
+<fieldset>
+<legend>Controls</legend>
+<div id="ctrls">
+	<div style="width: 100%; overflow: hidden;">
+		<div style="width: 20em; float: left;"><input id="btn-load-file" type="file" /></div>
+		<fieldset style="width: 25em; float: left;"><legend>Resolution (pixels per mm)</legend>
+			<select name="resolution" id="resolution" style="width: 100%">
+				<option value="5">Low (0.2mm/px) (125 DPI)</option>
+				<option value="10" selected="selected">Medium (0.1mm/px) (250 DPI)</option>
+				<option value="20">High (0.05mm/px) (500 DPI)</option>
+			</select>
+		</fieldset>
+	</div>
+	<div style="width: 100%; overflow: hidden;">
+		<fieldset style="width: 30%; float: left;"><legend>Brightness</legend><div id="slider-brightness" class="slider-fieldset-div"><div id="slider-brightness-handle" class="ui-slider-handle"></div></div></fieldset>
+		<fieldset style="width: 30%; float: left;"><legend>Contrast</legend><div id="slider-contrast" class="slider-fieldset-div"><div id="slider-contrast-handle" class="ui-slider-handle"></div></div></fieldset>
+		<fieldset style="width: 30%; float: left;"><legend>Gamma</legend><div id="slider-gamma" class="slider-fieldset-div"><div id="slider-gamma-handle" class="ui-slider-handle"></div></div></fieldset>
+	</div>
+	<div style="width: 100%; overflow: hidden;">
+		<fieldset style="width: 50%"><legend>Size (mm)</legend>
+			<label for="img-width">width: </label><input id="img-width" name="img-width" />mm &nbsp;&nbsp;x&nbsp;&nbsp; <label for="img-height">height: </label><input id="img-height" name="img-height" />mm &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <label for="lock-aspect">lock aspect? </label><input type="checkbox" checked="checked" name="lock-aspect" id="lock-aspect" />
+		</fieldset>
+	</div>
+	<div style="width: 100%; overflow: hidden;">
+		<fieldset style="width: 24%; float: left;"><input id="btn-dither" name="btn-dither" value="Dither!" /></fieldset>
+		<fieldset style="width: 24%; float: left;"><label for="invert">Invert?</label><input type="checkbox" id="invert" name="invert" checked="checked" /></fieldset>
+	</div>
+</div>
+</fieldset>
+
+<div id="orig-img-div" style="display: none" ><canvas id="orig-img" /></div>
+
+<fieldset id="fld-img">
+<legend>Image</legend>
+<div id="img-div">
+	<div id="rendering-div"><img src="spinner.gif" /></div>
+	<canvas id="visible-img" /></div>
+</fieldset>
+
+<fieldset id="fld-hist">
+<legend>Histogram</legend>
+<div id="histograms" style="width: 100%; overflow: hidden;">
+	<fieldset style="width: 300px; float: left;"><legend>Original</legend><canvas id="hist-orig" /></fieldset>
+	<fieldset style="width: 300px; float: left;"><legend>After</legend><canvas id="hist-after" /></fieldset>
+</div>
+</fieldset>
+
+<fieldset id="fld-dithered">
+<legend>Dithered Result</legend>
+<div id="dithered-div">
+	<div id="dithering-div"><img src="spinner.gif" /></div>
+	<canvas id="dithered-img" /></div>
+</div>
+</fieldset>
+
+</form>
+</body>
+</html>
