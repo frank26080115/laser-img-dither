@@ -182,6 +182,11 @@ $( function() {
 			apply_filters();
 		}
 	});
+	var chk_drawbox = $( "#drawbox" ).checkboxradio();
+	chk_drawbox.on("change", function( event ) {
+		console.log("drawbox = " + chk_drawbox.prop("checked"));
+		$("#fld-dithered").hide();
+	});
 
 	// trigger change event on all spinner buttons
 	$('.ui-spinner-button').click(function() {
@@ -369,15 +374,20 @@ function dither()
 
 	var imageObj = new Image();
 	imageObj.onload = function() {
-		tgtCtx.drawImage(this, 0, 0, srcCanvas.width, srcCanvas.height, 0, 0, tgtCanvas.width, tgtCanvas.height);
+
+		var padpix = 0;
+		if ($("#drawbox").prop("checked")) {
+			padpix = 1;
+		}
+		tgtCtx.drawImage(this, 0, 0, srcCanvas.width, srcCanvas.height, padpix, padpix, tgtCanvas.width - (padpix * 2), tgtCanvas.height - (padpix * 2));
 
 		var imgdata = tgtCtx.getImageData(0, 0, tgtCanvas.width, tgtCanvas.height);
-		
+
 		var sf = 1.0;
 		var x, y;
-		for (y = 0; y < nheight; y++)
+		for (y = padpix; y < nheight - padpix; y++)
 		{
-			for (x = 0; x < nwidth; x++)
+			for (x = padpix; x < nwidth - padpix; x++)
 			{
 				var idx = getPixIdx(y, x, nwidth);
 				var old_pix = imgdata.data[idx];
@@ -388,19 +398,48 @@ function dither()
 				imgdata.data[idx + 3] = 255;
 				var quant_error_p = old_pix - new_pix;
 
-				if (x < nwidth - 1) {
+				if (x < nwidth - 1 - padpix) {
 					imgdata.data[getPixIdx(y,     x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y,     x + 1, nwidth)] + quant_error_p * 7 / 16.0);
 				}
-				if (x > 0 && y < nheight - 1) {
+				if (x > padpix && y < nheight - 1 - padpix) {
 					imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] + quant_error_p * 3 / 16.0);
 				}
-				if (y < nheight - 1) {
+				if (y < nheight - 1 - padpix) {
 					imgdata.data[getPixIdx(y + 1, x    , nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x    , nwidth)] + quant_error_p * 5 / 16.0);
 				}
-				if (x < nwidth - 1 && y < nheight - 1) {
+				if (x < nwidth - 1 - padpix && y < nheight - 1 - padpix) {
 					imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] + quant_error_p * 1 / 16.0);
 				}
 			}
+		}
+		if ($("#drawbox").prop("checked")) {
+			for (y = 0; y < nheight; y++)
+			{
+				var idx1 = getPixIdx(y, 0, nwidth);
+				var idx2 = getPixIdx(y, nwidth - 1, nwidth);
+				imgdata.data[idx1 + 0] = 0;
+				imgdata.data[idx1 + 1] = 0;
+				imgdata.data[idx1 + 2] = 0;
+				imgdata.data[idx1 + 3] = 255;
+				imgdata.data[idx2 + 0] = 0;
+				imgdata.data[idx2 + 1] = 0;
+				imgdata.data[idx2 + 2] = 0;
+				imgdata.data[idx2 + 3] = 255;
+			}
+			for (x = 0; x < nwidth; x++)
+			{
+				var idx1 = getPixIdx(0, x, nwidth);
+				var idx2 = getPixIdx(nheight - 1, x, nwidth);
+				imgdata.data[idx1 + 0] = 0;
+				imgdata.data[idx1 + 1] = 0;
+				imgdata.data[idx1 + 2] = 0;
+				imgdata.data[idx1 + 3] = 255;
+				imgdata.data[idx2 + 0] = 0;
+				imgdata.data[idx2 + 1] = 0;
+				imgdata.data[idx2 + 2] = 0;
+				imgdata.data[idx2 + 3] = 255;
+			}
+			// the rect() function isn't great for this
 		}
 		tgtCtx.putImageData(imgdata, 0, 0);
 
@@ -475,7 +514,7 @@ function dither()
 	</div>
 	<div style="width: 100%; overflow: hidden;">
 		<fieldset style="width: 24%; float: left;"><input id="btn-dither" name="btn-dither" value="Dither!" /></fieldset>
-		<fieldset style="width: 24%; float: left;"><label for="invert">Invert?</label><input type="checkbox" id="invert" name="invert" checked="checked" /></fieldset>
+		<fieldset style="width: 24%; float: left;"><label for="invert">Invert?</label><input type="checkbox" id="invert" name="invert" checked="checked" />&nbsp;&nbsp;&nbsp;&nbsp;<label for="drawbox">Draw Box?</label><input type="checkbox" id="drawbox" name="drawbox" /></fieldset>
 	</div>
 </div>
 </fieldset>
