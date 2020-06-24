@@ -377,7 +377,7 @@ function dither()
 		var x, y;
 		for (y = 0; y < nheight; y++)
 		{
-			for (x = 1; x < nwidth; x++)
+			for (x = 0; x < nwidth; x++)
 			{
 				var idx = getPixIdx(y, x, nwidth);
 				var old_pix = imgdata.data[idx];
@@ -388,10 +388,18 @@ function dither()
 				imgdata.data[idx + 3] = 255;
 				var quant_error_p = old_pix - new_pix;
 
-				imgdata.data[getPixIdx(y,     x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y,     x + 1, nwidth)] + quant_error_p * 7 / 16.0);
-				imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] + quant_error_p * 3 / 16.0);
-				imgdata.data[getPixIdx(y + 1, x    , nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x    , nwidth)] + quant_error_p * 5 / 16.0);
-				imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] + quant_error_p * 1 / 16.0);
+				if (x < nwidth - 1) {
+					imgdata.data[getPixIdx(y,     x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y,     x + 1, nwidth)] + quant_error_p * 7 / 16.0);
+				}
+				if (x > 0 && y < nheight - 1) {
+					imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x - 1, nwidth)] + quant_error_p * 3 / 16.0);
+				}
+				if (y < nheight - 1) {
+					imgdata.data[getPixIdx(y + 1, x    , nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x    , nwidth)] + quant_error_p * 5 / 16.0);
+				}
+				if (x < nwidth - 1 && y < nheight - 1) {
+					imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] = minmax(imgdata.data[getPixIdx(y + 1, x + 1, nwidth)] + quant_error_p * 1 / 16.0);
+				}
 			}
 		}
 		tgtCtx.putImageData(imgdata, 0, 0);
