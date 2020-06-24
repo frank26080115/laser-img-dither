@@ -29,6 +29,7 @@ $( function() {
 	$( "#resolution" ).selectmenu({
 		change: function( event, ui ) {
 			console.log("resolution = " + $("#resolution option:selected").val());
+			$("#fld-dithered").hide();
 		}
 	});
 	$( "#resolution-button" ).width("20em");
@@ -432,7 +433,7 @@ function dither()
 
 .ui-spinner
 {
-	min-width: 100px;
+	min-width: 80px;
 }
 </style>
 
@@ -444,14 +445,15 @@ function dither()
 <legend>Controls</legend>
 <div id="ctrls">
 	<div style="width: 100%; overflow: hidden;">
-		<div style="width: 20em; float: left;"><input id="btn-load-file" type="file" /></div>
-		<fieldset style="width: 25em; float: left;"><legend>Resolution (pixels per mm)</legend>
+		<fieldset style="width: 25%; float: left;"><legend>Choose Picture File</legend><input id="btn-load-file" type="file" /></fieldset>
+		<fieldset style="width: 35%; float: left;"><legend>Resolution (pixels per mm)</legend>
 			<select name="resolution" id="resolution" style="width: 100%">
 				<option value="5">Low (0.2mm/px) (125 DPI)</option>
 				<option value="10" selected="selected">Medium (0.1mm/px) (250 DPI)</option>
 				<option value="20">High (0.05mm/px) (500 DPI)</option>
 			</select>
 		</fieldset>
+		<fieldset style="float: left;"><legend>About</legend>Author: Frank Zhao <a href="https://www.eleccelerator.com/" target="_blank">(www)</a></fieldset>
 	</div>
 	<div style="width: 100%; overflow: hidden;">
 		<fieldset style="width: 30%; float: left;"><legend>Brightness</legend><div id="slider-brightness" class="slider-fieldset-div"><div id="slider-brightness-handle" class="ui-slider-handle"></div></div></fieldset>
